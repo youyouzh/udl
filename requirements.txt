@@ -5,5 +5,5 @@
 torch==2.0.1
 torchvision==0.15.2
 
-# d2l book
+# d2l book，最新的0.17.6版本有冲突
 # d2l==0.17.0
