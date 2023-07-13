@@ -164,3 +164,9 @@ log/
 
 # idea file
 .idea/
+
+# temp book dir
+book/
+
+# data dir
+data/
