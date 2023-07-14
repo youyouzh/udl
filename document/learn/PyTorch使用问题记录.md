@@ -38,3 +38,13 @@ print((a == b) or (a != b)) # RuntimeError: Boolean value of Tensor with more th
 若是数据部署在GPU上时，则修改为： `y.cpu().numpy()` ---> `y.cpu().detach().numpy()`
 
 或者复制一个张量： `torch.tensor(loss, requires_grad=False)`
+
+### 梯度清零错误
+
+调用`x.grad.data.zero_()`时报错：`AttributeError: 'NoneType' object has no attribute 'data'`。
+
+在使用pytorch实现多项线性回归中，在grad更新时，每一次运算后都需要将上一次的梯度记录清空，运行时报错，grad没有data这个属性，
+
+原因是，在系统将w的grad值初始化为none，第一次求梯度计算是在none值上进行报错，自然会没有data属性
+
+修改方法：添加一个判断语句，检查由grad再进行运算。
