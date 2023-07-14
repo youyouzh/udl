@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils import data
 
-from base.util import plot, plt
+from base.util import plot, plt, sgd
 
 
 # 计算正态分布
@@ -41,6 +41,24 @@ def test_synthetic_data():
     plt.show()
 
 
+def manual_data_iter(features, labels, batch_size):
+    """
+    手动实现的数据迭代器，⽣成⼤⼩为batch_size的⼩批量。每个⼩批量包含⼀组特征和标签。
+    :param features 特征矩阵
+    :param labels 标签向量
+    :param batch_size 批量⼤⼩
+    """
+    # 生成随机下标
+    sample_size = len(features)
+    indices = list(range(sample_size))
+    # 这些样本是随机读取的，没有特定的顺序
+    random.shuffle(indices)
+    for i in range(0, sample_size, batch_size):
+        # 截取batch_size的样本数据
+        batch_indices = torch.tensor(indices[i: min(i + batch_size, sample_size)])
+        yield features[batch_indices], labels[batch_indices]
+
+
 # 手动实现的线性分类器
 class ManualLinearRegression(object):
 
@@ -51,8 +69,16 @@ class ManualLinearRegression(object):
 
         # 模型结构
         self.net = None
-        self.optim = None   # 优化算法
+        self.optimizer = None   # 优化算法
         self.loss_func = None  # 损失函数
+
+        # 数据迭代器
+        self.train_data_iter = None  # 训练数据集迭代器
+        self.test_data_iter = None   # 测试数据集迭代器
+
+        # 全量输入特征和标签
+        self.features = None
+        self.labels = None
 
         # 保存训练过程
         self.train_loss_history = None
@@ -82,28 +108,7 @@ class ManualLinearRegression(object):
         # 线性回归模型
         self.net = lambda x: torch.matmul(x, self.w) + self.b
         self.loss_func = lambda y_hat, y: (y_hat - y.reshape(y_hat.shape)) ** 2 / 2
-
-        def sgd(params, learning_rate, batch_size):
-            """定义优化算法，小批量随机梯度下降"""
-            with torch.no_grad():
-                for param in params:
-                    param -= learning_rate * param.grad / batch_size
-                    param.grad.zero_()
-        self.optim = sgd
-
-    def data_iter(self, features, labels, batch_size):
-        """
-        接收批量⼤⼩、特征矩阵和标签向量作为输⼊，⽣成⼤⼩为batch_size的⼩批量。每个⼩批量包含⼀组特征和标签。
-        """
-        # 生成随机下标
-        sample_size = len(features)
-        indices = list(range(sample_size))
-        # 这些样本是随机读取的，没有特定的顺序
-        random.shuffle(indices)
-        for i in range(0, sample_size, batch_size):
-            # 截取batch_size的样本数据
-            batch_indices = torch.tensor(indices[i: min(i + batch_size, sample_size)])
-            yield features[batch_indices], labels[batch_indices]
+        self.optimizer = sgd
 
     def preset_hyper_param(self, learning_rate=0.03, num_epochs=5, batch_size=200):
         # 定义训练超参数
@@ -112,19 +117,49 @@ class ManualLinearRegression(object):
         self.batch_size = batch_size
         self.train_loss_history = torch.zeros([num_epochs])
 
-    def train(self, features, labels):
+    # 设置全量的输入特征和标签
+    def set_features_labels(self, features, labels):
+        self.features = features
+        self.labels = labels
+        self.train_data_iter = manual_data_iter
+
+    def set_data_iter(self, train_iter, test_iter=None):
+        self.train_data_iter = train_iter
+        self.test_data_iter = test_iter
+
+    def get_train_data_iter(self):
+        """
+        获取数据迭代器，返回训练数据集迭代器data_iter
+        """
+        if not self.train_data_iter:
+            raise Exception('请先设置训练数据迭代器')
+        return self.train_data_iter
+
+    def get_test_data_iter(self):
+        if not self.test_data_iter:
+            raise Exception('请先设置测试数据迭代器')
+        return self.test_data_iter
+
+    def get_features_labels(self):
+        if self.features is None:
+            raise Exception("请先设置全量输入特征和标签")
+        return self.features, self.labels
+
+    def train(self):
         # 迭代训练
+        features, labels = self.get_features_labels()
         for epoch in range(self.num_epochs):
-            for X, y in self.data_iter(features, labels, self.batch_size):
+            for X, y in self.get_train_data_iter()(self.features, self.labels, self.batch_size):
                 loss = self.loss_func(self.net(X), y)  # X和y的小批量损失
                 # 因为loss形状是(batch_size,1)，而不是一个标量。l中的所有元素被加到一起，
                 # 并以此计算关于[w,b]的梯度
                 loss.sum().backward()
-                self.optim([self.w, self.b], self.learning_rate, self.batch_size)  # 使用参数的梯度更新参数
+                self.optimizer([self.w, self.b], self.learning_rate, self.batch_size)  # 使用参数的梯度更新参数
             with torch.no_grad():
-                train_loss = self.loss_func(self.net(features), labels)
-                self.train_loss_history[epoch] = train_loss
-                print(f'epoch {epoch + 1}, loss {float(train_loss.mean()):f}')
+                # 全量数据数据的损失
+                total_loss = self.loss_func(self.net(features), labels).mean()
+                print(f'epoch {epoch + 1}, loss {float(total_loss):f}')
+                self.train_loss_history[epoch] = total_loss
 
     def evaluate(self, true_w, true_b):
         print(f'true_w: {true_w}, w: {self.w}, 估计误差：{true_w - self.w.reshape(true_w.shape)}')
@@ -139,38 +174,43 @@ class SimpleLinearRegression(ManualLinearRegression):
     def __init__(self):
         super().__init__()
 
-    def data_iter(self, features, labels, batch_size):
-        """数据迭代器，实现小批量样本抽取"""
-        dataset = (features, labels)
-        dataset = data.TensorDataset(*dataset)
-        return data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
     def define_model(self):
         # 定义一个输入是2维，输出是1维的神经网络层
         self.net = nn.Sequential(nn.Linear(2, 1))
         # 计算均方误差使用的是`MSELoss`类，也称为平方$L_2$范数
         self.loss_func = nn.MSELoss()
         # 设置小批量随机梯度下降算法
-        self.optim = torch.optim.SGD(self.net.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.SGD(self.net.parameters(), lr=self.learning_rate)
+
+    def set_features_labels(self, features, labels):
+        self.features = features
+        self.labels = labels
+
+        # 数据迭代器，实现小批量样本抽取
+        dataset = (features, labels)
+        dataset = data.TensorDataset(*dataset)
+        self.train_data_iter = data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
     def init_model(self):
         self.net[0].weight.data.normal_(0, 0.01)
         self.net[0].bias.data.fill_(0)
 
-    def train(self, features, labels):
-        data_iter = self.data_iter(features, labels, self.batch_size)
+    def train(self):
+        train_data_iter = self.get_train_data_iter()
+        features, labels = self.get_features_labels()
         for epoch in range(self.num_epochs):
-            for X, y in data_iter:
+            for X, y in train_data_iter:
                 # 生成预测并计算损失`loss`
                 loss = self.loss_func(self.net(X), y)
-                self.optim.zero_grad()
+                self.optimizer.zero_grad()
                 # 通过进行反向传播来计算梯度
                 loss.backward()
                 # 通过调用优化器来更新模型参数
-                self.optim.step()
-            train_loss = self.loss_func(self.net(features), labels)
-            print(f'epoch {epoch + 1}, loss {train_loss:f}')
-            self.train_loss_history[epoch] = torch.tensor(train_loss, requires_grad=False)
+                self.optimizer.step()
+            # 全量数据数据的损失
+            total_loss = self.loss_func(self.net(features), labels)
+            print(f'epoch {epoch + 1}, loss {total_loss:f}')
+            self.train_loss_history[epoch] = torch.tensor(total_loss, requires_grad=False)
         self.w = self.net[0].weight.data
         self.b = self.net[0].bias.data
 
@@ -178,14 +218,15 @@ class SimpleLinearRegression(ManualLinearRegression):
 def test_manual_linear():
     # linear_regression = ManualLinearRegression()
     linear_regression = SimpleLinearRegression()
+    # 定义训练超参数
+    linear_regression.preset_hyper_param(num_epochs=50)
     # 定义数据集
     preset_w = torch.tensor([2, -3.4])
     preset_b = 4.2
     features, labels = synthetic_data(preset_w, preset_b)
-    # 定义训练超参数
-    linear_regression.preset_hyper_param(num_epochs=50)
+    linear_regression.set_features_labels(features, labels)
     # 训练模型
-    linear_regression.train(features, labels)
+    linear_regression.train()
     # 评估模型结果
     linear_regression.evaluate(preset_w, preset_b)
 
