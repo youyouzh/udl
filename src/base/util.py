@@ -1,6 +1,6 @@
 import torch
 from matplotlib import pyplot as plt
-
+from torch.utils import data
 
 # Return True if `x` (tensor or list) has 1 axis
 def has_one_axis(x):
@@ -112,3 +112,9 @@ def sgd(params, learning_rate, batch_size):
         for param in params:
             param -= learning_rate * param.grad / batch_size
             param.grad.zero_()
+
+
+def torch_data_iter(features, labels, batch_size):
+    dataset = (features, labels)
+    dataset = data.TensorDataset(*dataset)
+    return data.DataLoader(dataset, batch_size=batch_size, shuffle=True)

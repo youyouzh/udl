@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils import data
 
-from base.util import plot, plt, sgd
+from base.util import plot, plt, sgd, torch_data_iter
 
 
 # 计算正态分布
@@ -187,9 +187,7 @@ class SimpleLinearRegression(ManualLinearRegression):
         self.labels = labels
 
         # 数据迭代器，实现小批量样本抽取
-        dataset = (features, labels)
-        dataset = data.TensorDataset(*dataset)
-        self.train_data_iter = data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        self.train_data_iter = torch_data_iter(features, labels, self.batch_size)
 
     def init_model(self):
         self.net[0].weight.data.normal_(0, 0.01)
