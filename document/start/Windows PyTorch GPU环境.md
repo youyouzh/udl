@@ -2,7 +2,9 @@
 
 ## Windows安装PyTorch GPU环境
 
-基本情况：2023年07月，Python版本3.10，安装PyTorch最新版2.0.1，cuda安装12.0。要注意安装PyTorch的时候CPU和GPU版本是不一样的。
+基本情况：2023年07月，Python版本3.10，PyTorch最新版2.0.1，cuda支持到12.0。要注意安装PyTorch的时候CPU和GPU版本是不一样的。
+
+官网地址：<https://pytorch.org/get-started/locally/>
 
 ### 安装CUDA
 
@@ -13,13 +15,14 @@
 - 查看显卡支持CUDA版本： [点击查看显卡驱动对于CUDA版本](https://docs.nvidia.com/cuda/archive/10.0/cuda-toolkit-release-notes/index.html)，按照步骤3，点击组件，其中有`NVCUDA.dll`，就是当前支持的CUDA版本
 - 安装Visual Studio 2015、2017 和 2019 的 Microsoft Visual C++ 可再发行组件： [软件下载地址](https://support.microsoft.com/zh-cn/help/2977003/the-latest-supported-visual-c-downloads)，下载并安装`vc_redist.x64.exe`，安装完要重启
 - 安装CUDA： [CUDA下载地址](https://developer.nvidia.com/cuda-toolkit-archive)，通过上面几步，找到合适自己环境版本的CUDA，**版本一定要对得上**
+- 安装cuDNN，cuDNN（CUDA Deep Neural Network library）是NVIDIA打造的针对深度神经网络的加速库，[cuDNN地址](https://developer.nvidia.com/rdp/cudnn-archive)，注意要和CUDA版本匹配，下载后解压分别替换CUDA安装目录下的文件夹`include`、`lib`、`bin`即可
 
 这儿安装[CUDA-11.6.0](https://developer.nvidia.com/cuda-11-6-2-download-archive)，下载后直接安装即可。安装完成后需要添加下面的环境变量：
 
 - CUDA_PATH: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6`
 - CUDA_PATH_V11_6: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6`
 - NVTOLLSEXT_PATH: `C:\Program Files\NVIDIA GPU Computing Toolkit\NvTollsExt`
-- Path中需要将`include`、`bin`、`lib`、`libnvvp`是个目录都添加到进去
+- Path中需要将`include`、`bin`、`lib`、`libnvvp`四个目录都添加到进去
 
 在cmd中执行命令`nvcc --version`和`set data`查看是否安装成功。
 
@@ -38,7 +41,13 @@ pip uninstall torch torchvision torchaudio
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu116
 ```
 
-安装完成后，执行`torch.cuda.is_available()`返回True说明已经在使用GPU版本了。
+安装完成后，执行`torch.cuda.is_available()`返回True说明已经在使用GPU版本了。这儿安装的PyTorch版本是`1.13.1+cu116`并不是`2.0.1`版本。**注意安装的时候不要勾选`Driver`**。
+
+### 安装PyTorch的2.0.1版本
+
+`CUDA-11.8`下载地址：<https://developer.nvidia.com/cuda-11-8-0-download-archive>。可以同时安装多个CUDA版本，注意环境变量配置决定用哪一个版本。
+
+截止到2023年7月PyTorch最新版为`2.0.1`，支持的`CUDA-11.7`和`CUDA-11.8`，可以通过命令进行安装：`pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`。
 
 ### 设置使用GPU进行训练
 
