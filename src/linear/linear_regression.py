@@ -3,7 +3,6 @@ import random
 import numpy as np
 import torch
 from torch import nn
-from torch.utils import data
 
 from base.util import plot, plt, sgd, torch_data_iter
 
@@ -208,7 +207,7 @@ class SimpleLinearRegression(ManualLinearRegression):
             # 全量数据数据的损失
             total_loss = self.loss_func(self.net(features), labels)
             print(f'epoch {epoch + 1}, loss {total_loss:f}')
-            self.train_loss_history[epoch] = torch.tensor(total_loss, requires_grad=False)
+            self.train_loss_history[epoch] = total_loss.detach()
         self.w = self.net[0].weight.data
         self.b = self.net[0].bias.data
 
