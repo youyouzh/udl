@@ -103,7 +103,7 @@ class SoftmaxLinearRegression(ManualLinearRegression):
         for X, y in data_iter:
             # 计算梯度并更新参数
             y_hat = self.net(X)
-            loss = self.loss_func(y_hat, y)
+            loss = self.calc_loss(y_hat, y)
             if isinstance(self.optimizer, torch.optim.Optimizer):
                 # 使用PyTorch内置的优化器和损失函数
                 self.optimizer.zero_grad()
@@ -116,6 +116,10 @@ class SoftmaxLinearRegression(ManualLinearRegression):
             metric.add(float(loss.sum()), self.accuracy(y_hat, y), y.numel())
         # 返回训练损失和训练精度
         return metric[0] / metric[2], metric[1] / metric[2]
+
+    def calc_loss(self, y_hat, y):
+        # 计算损失
+        return self.loss_func(y_hat, y)
 
     def train(self):
         """训练模型（定义见第3章）"""
