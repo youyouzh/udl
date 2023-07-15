@@ -74,7 +74,7 @@ class Animator(object):
                  fmts=('-', 'm--', 'g-.', 'r:'), nrows=1, ncols=1,
                  figsize=(3.5, 2.5)):
         # 增量地绘制多条线
-        legend = [] if legend is None else []
+        legend = [] if legend is None else legend
         self.fig, self.axes = plt.subplots(nrows, ncols, figsize=figsize)
         if nrows * ncols == 1:
             self.axes = [self.axes, ]
