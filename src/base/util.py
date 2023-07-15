@@ -2,6 +2,7 @@ import torch
 from matplotlib import pyplot as plt
 from torch.utils import data
 
+
 # Return True if `x` (tensor or list) has 1 axis
 def has_one_axis(x):
     return (hasattr(x, "ndim") and x.ndim == 1 or
@@ -114,7 +115,18 @@ def sgd(params, learning_rate, batch_size):
             param.grad.zero_()
 
 
-def torch_data_iter(features, labels, batch_size):
+def torch_data_iter(features, labels, batch_size, is_train=True):
+    """
+    创建数据迭代器
+    :param features: 特征
+    :param labels: 标签
+    :param batch_size: 批量大小
+    :param is_train: 是否训练，true表示需要进行随机抽取
+    :return: data_iter数据迭代器
+    """
     dataset = (features, labels)
     dataset = data.TensorDataset(*dataset)
-    return data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    return data.DataLoader(dataset, batch_size=batch_size, shuffle=is_train)
+
+
+load_array = torch_data_iter
