@@ -8,7 +8,7 @@
 
 ### 安装CUDA
 
-在cmd中输入命令`mvidia-smi`可以查看显卡信息，以及支持的CUDA版本。
+在cmd中输入命令`nvidia-smi`可以查看显卡信息，以及支持的CUDA版本。
 
 - 查看显卡算力： [点击查看显卡算力表](https://developer.nvidia.com/cuda-gpus)，有不同显卡的算力，算力至少3.5以上才能安装CUDA
 - 查看显卡驱动版本： [点击下载更新驱动](https://www.nvidia.com/Download/index.aspx)，右键空白地方 -> NIVIDIA 控制面板 -> 左下角系统消息 -> 显示 -> 查看驱动版本

@@ -48,3 +48,21 @@ print((a == b) or (a != b)) # RuntimeError: Boolean value of Tensor with more th
 原因是，在系统将w的grad值初始化为none，第一次求梯度计算是在none值上进行报错，自然会没有data属性
 
 修改方法：添加一个判断语句，检查由grad再进行运算。
+
+### 定义网络并运算时报错
+
+报错信息：`RuntimeError: Input type (torch.FloatTensor) and weight type (torch.cuda.FloatTensor) should be the same or input should be a MKLDNN tensor and weight is a dense tensor`。
+
+错误内容就在类型不匹配，根据报错内容可以看出Input type为torch.FloatTensor（CPU数据类型），而weight type（即网络权重参数这些）为torch.cuda.FloatTensor（GPU数据类型）。
+
+神经网络参数是在GPU中的，将输入数据拷贝到GPU中即可。
+
+```python
+import torch
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print(torch.cuda.is_available())
+
+inputs = inputs.to(device)        	# 方法一：将input这个tensor转换成了CUDA 类型
+inputs = inputs.cuda()				# 方法二：将input这个tensor转换成了CUDA 类型
+```

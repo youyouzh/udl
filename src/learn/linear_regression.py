@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from base.util import plot, plt, sgd, torch_data_iter
+from base.util import plot, plt, sgd, torch_data_iter, try_gpu
 
 
 # 计算正态分布
@@ -86,6 +86,9 @@ class ManualLinearRegression(object):
         self.learning_rate = 0.03
         self.num_epochs = 3
         self.batch_size = 100
+
+        # 尝试使用GPU
+        self.device = try_gpu()
 
         # 定义模型结构
         self.define_model()

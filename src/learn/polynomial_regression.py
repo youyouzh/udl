@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 from base.util import plt, Accumulator, Animator, torch_data_iter
-from d2l.multilayer_perceptron import MultilayerPerceptron
+from multilayer_perceptron import MultilayerPerceptron
 
 
 def generate_polynomial_data(max_degree=20, n_train=100, n_test=100):

@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from base.util import plot
-from d2l.softmax_regression import SimpleSoftmaxLinearRegression, load_data_fashion_mnist
+from softmax_regression import SimpleSoftmaxLinearRegression, load_data_fashion_mnist
 
 
 # 一些激活函数的检查测试
