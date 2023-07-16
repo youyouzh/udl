@@ -130,3 +130,24 @@ def torch_data_iter(features, labels, batch_size, is_train=True):
 
 
 load_array = torch_data_iter
+
+
+def try_gpu(i=0):
+    """
+    如果存在，则返回gpu(i)，否则返回cpu()
+    查看张量存放在什么设备： torch.rand(2, 2).device
+    在GPU上创建张量： torch.ones(2, 3, device=torch.device('cuda')
+    多个显卡上的张量不能直接运算，需要复制在同一个显卡上才能运算： Y.cuda(1)
+    可以将Sequential转到GPU上，net.to(device=try_gpu())
+    :param i 第几个显卡
+    :return torch.device
+    """
+    if torch.cuda.device_count() >= i + 1:
+        return torch.device(f'cuda:{i}')
+    return torch.device('cpu')
+
+
+def try_all_gpus():
+    """返回所有可用的GPU，如果没有GPU，则返回[cpu(),]"""
+    devices = [torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
+    return devices if devices else [torch.device('cpu')]
