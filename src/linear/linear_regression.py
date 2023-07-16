@@ -89,21 +89,16 @@ class ManualLinearRegression(object):
 
         # 定义模型结构
         self.define_model()
-        # 初始化模型参数
-        self.init_model()
-
-    def init_model(self):
-        """
-        初始化模型参数
-        均值为0、标准差为0.01的正态分布中采样随机数来初始化权重，并将偏置初始化为0。
-        """
-        self.w = torch.normal(0, 0.01, size=(2, 1), requires_grad=True)
-        self.b = torch.zeros(1, requires_grad=True)
 
     def define_model(self):
         """
+        初始化模型参数
         定义模型，设定模型结构，损失函数，优化方法
         """
+        # 均值为0、标准差为0.01的正态分布中采样随机数来初始化权重，并将偏置初始化为0。
+        self.w = torch.normal(0, 0.01, size=(2, 1), requires_grad=True)
+        self.b = torch.zeros(1, requires_grad=True)
+
         # 线性回归模型
         self.net = lambda x: torch.matmul(x, self.w) + self.b
         self.loss_func = lambda y_hat, y: (y_hat - y.reshape(y_hat.shape)) ** 2 / 2
@@ -118,11 +113,22 @@ class ManualLinearRegression(object):
 
     # 设置全量的输入特征和标签
     def set_features_labels(self, features, labels):
+        """
+        设置训练全量数据，包括特征和标签，会同时设置训练数据迭代器和测试数据迭代器
+        :param features: 特征
+        :param labels: 标签
+        :return:
+        """
         self.features = features
         self.labels = labels
         self.train_data_iter = manual_data_iter
 
     def set_data_iter(self, train_iter, test_iter=None):
+        """
+        设置数据迭代器
+        :param train_iter: 训练数据集迭代器
+        :param test_iter: 测试数据集迭代器
+        """
         self.train_data_iter = train_iter
         self.test_data_iter = test_iter
 
@@ -180,6 +186,9 @@ class SimpleLinearRegression(ManualLinearRegression):
         self.loss_func = nn.MSELoss()
         # 设置小批量随机梯度下降算法
         self.optimizer = torch.optim.SGD(self.net.parameters(), lr=self.learning_rate)
+        # 初始化模型参数
+        self.net[0].weight.data.normal_(0, 0.01)
+        self.net[0].bias.data.fill_(0)
 
     def set_features_labels(self, features, labels):
         self.features = features
@@ -187,10 +196,6 @@ class SimpleLinearRegression(ManualLinearRegression):
 
         # 数据迭代器，实现小批量样本抽取
         self.train_data_iter = torch_data_iter(features, labels, self.batch_size)
-
-    def init_model(self):
-        self.net[0].weight.data.normal_(0, 0.01)
-        self.net[0].bias.data.fill_(0)
 
     def train(self):
         train_data_iter = self.get_train_data_iter()

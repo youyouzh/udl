@@ -78,13 +78,12 @@ def softmax(x):
 
 class SoftmaxLinearRegression(ManualLinearRegression):
 
-    def init_model(self):
+    def define_model(self):
         num_inputs = 784
         num_outputs = 10
         self.w = torch.normal(0, 0.01, size=(num_inputs, num_outputs), requires_grad=True)
         self.b = torch.zeros(num_outputs, requires_grad=True)
 
-    def define_model(self):
         # softmax线性回归模型
         # 将数据传递到模型之前，我们使⽤reshape函数将每张原始图像展平为向量
         self.net = lambda x: softmax(torch.matmul(x.reshape((-1, self.w.shape[0])), self.w) + self.b)
@@ -172,10 +171,6 @@ class SoftmaxLinearRegression(ManualLinearRegression):
 
 class SimpleSoftmaxLinearRegression(SoftmaxLinearRegression):
 
-    def init_model(self):
-        # 设置初始化参数
-        self.net.apply(lambda m: nn.init.normal_(m.weight, std=0.01) if type(m) == nn.Linear else m)
-
     def define_model(self):
         # 在线性层前定义了展平层（flatten），来调整网络输入的形状
         self.net = nn.Sequential(nn.Flatten(), nn.Linear(784, 10))
@@ -183,6 +178,8 @@ class SimpleSoftmaxLinearRegression(SoftmaxLinearRegression):
         self.loss_func = nn.CrossEntropyLoss(reduction='none')
         # 定义优化算法
         self.optimizer = torch.optim.SGD(self.net.parameters(), self.learning_rate)
+        # 设置初始化参数
+        self.net.apply(lambda m: nn.init.normal_(m.weight, std=0.01) if type(m) == nn.Linear else m)
 
 
 def test_softmax_regression():

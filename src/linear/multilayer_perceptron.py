@@ -48,9 +48,6 @@ class MultilayerPerceptron(SimpleSoftmaxLinearRegression):
         self.params = [self.W1, self.b1, self.W2, self.b2]
         super().__init__()
 
-    def init_model(self):
-        pass
-
     def define_model(self):
         def net(x):
             x = x.reshape((-1, self.W1.shape[0]))
@@ -66,10 +63,6 @@ class MultilayerPerceptron(SimpleSoftmaxLinearRegression):
 
 class ConciseMultilayerPerceptron(MultilayerPerceptron):
 
-    def init_model(self):
-        # 设置初始化参数
-        self.net.apply(lambda m: nn.init.normal_(m.weight, std=0.01) if type(m) == nn.Linear else m)
-
     def define_model(self):
         self.net = nn.Sequential(nn.Flatten(),
                                  nn.Linear(self.W1.shape[0], self.W1.shape[1]),
@@ -79,6 +72,8 @@ class ConciseMultilayerPerceptron(MultilayerPerceptron):
         self.loss_func = nn.CrossEntropyLoss(reduction='none')
         # 定义优化器
         self.optimizer = torch.optim.SGD(self.net.parameters(), lr=self.learning_rate)
+        # 设置初始化参数
+        self.net.apply(lambda m: nn.init.normal_(m.weight, std=0.01) if type(m) == nn.Linear else m)
 
 
 def test_multilayer_perceptron():
@@ -99,5 +94,5 @@ def test_multilayer_perceptron():
 
 
 if __name__ == '__main__':
-    activation_function()
-    # test_multilayer_perceptron()
+    # activation_function()
+    test_multilayer_perceptron()
