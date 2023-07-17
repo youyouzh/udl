@@ -174,7 +174,8 @@ class VGG(AlexNet):
             nn.Linear(4096, 10))
 
     # 定义VGG块
-    def vgg_block(self, num_convs, in_channels, out_channels):
+    @staticmethod
+    def vgg_block(num_convs, in_channels, out_channels):
         """
         VGG块
         :param num_convs: 卷积层的数量
@@ -208,7 +209,8 @@ class NiN(AlexNet):
             # 将四维的输出转成二维的输出，其形状为(批量大小,10)
             nn.Flatten())
 
-    def nin_block(self, in_channels, out_channels, kernel_size, strides, padding):
+    @staticmethod
+    def nin_block(in_channels, out_channels, kernel_size, strides, padding):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, strides, padding),
             nn.ReLU(),
