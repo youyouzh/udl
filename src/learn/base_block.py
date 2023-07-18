@@ -4,6 +4,8 @@
 import torch
 from torch import nn
 
+from base.util import try_gpu, Accumulator
+
 
 # 自定义层
 class MultilayerPerceptronBlock(nn.Module):
@@ -37,6 +39,102 @@ class CustomSequential(nn.Sequential):
         for block in self._modules.values():
             x = block(x)
         return x
+
+
+# 神经网络基类，声明一些常用方法和属性
+class BaseNet(object):
+
+    def __init__(self, learning_rate=0.03, num_epochs=10, batch_size=100):
+        # 模型超参数
+        self.learning_rate = learning_rate
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
+
+        # 尝试使用GPU
+        self.device = try_gpu()
+
+        # 数据迭代器
+        self.train_data_iter = None  # 训练数据集迭代器
+        self.test_data_iter = None   # 测试数据集迭代器
+
+        # 模型结构
+        self.net = None
+        self.optimizer = None   # 优化算法
+        self.loss_func = None  # 损失函数
+
+        # 训练损失记录
+        self.train_loss_history = None
+
+        # 加载模型
+        self.load_model()
+
+    # 定义模型网络结构
+    def define_net(self):
+        pass
+
+    # 加载模型，如果修改了超参数，需要手动调用该方法
+    def load_model(self):
+        pass
+
+    def preset_hyper_param(self, learning_rate=0.03, num_epochs=5, batch_size=200):
+        # 定义训练超参数
+        self.learning_rate = learning_rate
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
+        self.train_loss_history = torch.zeros([num_epochs])
+
+    def set_data_iter(self, train_iter, test_iter=None):
+        """
+        设置数据迭代器
+        :param train_iter: 训练数据集迭代器
+        :param test_iter: 测试数据集迭代器
+        """
+        self.train_data_iter = train_iter
+        self.test_data_iter = test_iter
+
+    def get_train_data_iter(self):
+        """
+        获取数据迭代器，返回训练数据集迭代器data_iter
+        """
+        if not self.train_data_iter:
+            raise Exception('请先设置训练数据迭代器')
+        return self.train_data_iter
+
+    def get_test_data_iter(self):
+        if not self.test_data_iter:
+            raise Exception('请先设置测试数据迭代器')
+        return self.test_data_iter
+
+    # 评估数据迭代器的损失
+    def evaluate_loss(self, data_iter):
+        metric = Accumulator(2)
+        for X, y in data_iter:
+            out = self.net(X)
+            y = y.reshape(out.shape)
+            loss = self.loss_func(out, y)
+            metric.add(loss.sum(), loss.numel())
+        return metric[0] / metric[1]
+
+    @staticmethod
+    def accuracy(y_hat, y):
+        """计算预测正确的数量"""
+        if len(y_hat.shape) > 1 and y_hat.shape[1] > 1:
+            # 取概率最大的类别作为预测结果
+            y_hat = y_hat.argmax(axis=1)
+        # 类型敏感，先检查类型
+        cmp = y_hat.type(y.dtype) == y
+        return float(cmp.type(y.dtype).sum())
+
+    def evaluate_accuracy(self):
+        """计算在测试数据集上模型的精度"""
+        if isinstance(self.net, torch.nn.Module):
+            self.net.eval()  # 将模型设置为评估模式
+        metric = Accumulator(2)  # 正确预测数、预测总数
+        with torch.no_grad():
+            for X, y in self.get_test_data_iter():
+                # 遍历测试数据集，计算模型预测结果和世界结果差距并评估准确率
+                metric.add(self.accuracy(self.net(X), y), y.numel())
+        return metric[0] / metric[1]
 
 
 def test_mlp():
