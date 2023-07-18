@@ -1,5 +1,7 @@
+import os
 import time
 
+import requests
 import torch
 import numpy as np
 from matplotlib import pyplot as plt
@@ -183,3 +185,21 @@ def try_all_gpus():
     """返回所有可用的GPU，如果没有GPU，则返回[cpu(),]"""
     devices = [torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
     return devices if devices else [torch.device('cpu')]
+
+
+# 下载d2l数据集
+def download_d2l_data(filename, cache_dir=None):
+    """下载一个DATA_HUB中的文件，返回本地文件名"""
+    cache_dir = cache_dir if cache_dir else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+    filepath = os.path.join(cache_dir, filename)
+    if os.path.isfile(filepath):
+        print('The file is exist, do not need download: {}'.format(filepath))
+        return filepath
+    download_url = 'http://d2l-data.s3-accelerate.amazonaws.com/' + filename
+    if not os.path.isdir(cache_dir):
+        os.makedirs(cache_dir)
+    print(f'正在从{download_url}下载{filename}...')
+    response = requests.get(download_url, stream=True, verify=True)
+    with open(filepath, 'wb') as f:
+        f.write(response.content)
+    return filepath
