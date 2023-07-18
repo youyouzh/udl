@@ -2,12 +2,11 @@
 卷积神经网络相关
 """
 import torch
-
 from torch import nn
 
-from base.util import Accumulator, try_gpu, Animator, Timer
-from softmax_regression import load_data_fashion_mnist
+from base.util import Accumulator, Animator, Timer
 from multilayer_perceptron import MultilayerPerceptron
+from softmax_regression import load_data_fashion_mnist
 
 
 # 自定义一个简单的卷积层
@@ -75,14 +74,14 @@ class LeNet(MultilayerPerceptron):
         metric = Accumulator(2)
         test_data_iter = self.get_test_data_iter()
         with torch.no_grad():
-            for X, y in test_data_iter:
-                if isinstance(X, list):
+            for x, y in test_data_iter:
+                if isinstance(x, list):
                     # BERT微调所需的（之后将介绍）
-                    X = [x.to(device) for x in X]
+                    x = [x.to(device) for x in x]
                 else:
-                    X = X.to(device)
+                    x = x.to(device)
                 y = y.to(device)
-                metric.add(self.accuracy(self.net(X), y), y.numel())
+                metric.add(self.accuracy(self.net(x), y), y.numel())
         return metric[0] / metric[1]
 
     def train(self):
@@ -95,17 +94,17 @@ class LeNet(MultilayerPerceptron):
             # 训练损失之和，训练准确率之和，样本数
             metric = Accumulator(3)
             self.net.train()
-            for i, (X, y) in enumerate(train_data_iter):
+            for i, (x, y) in enumerate(train_data_iter):
                 timer.start()
                 self.optimizer.zero_grad()
                 # 将数据加载到GPU，加速训练
-                X, y = X.to(self.device), y.to(self.device)
-                y_hat = self.net(X)
+                x, y = x.to(self.device), y.to(self.device)
+                y_hat = self.net(x)
                 loss = self.loss_func(y_hat, y)
                 loss.backward()
                 self.optimizer.step()
                 with torch.no_grad():
-                    metric.add(loss * X.shape[0], self.accuracy(y_hat, y), X.shape[0])
+                    metric.add(loss * x.shape[0], self.accuracy(y_hat, y), x.shape[0])
                 timer.stop()
                 train_loss = metric[0] / metric[2]
                 train_acc = metric[1] / metric[2]
@@ -160,7 +159,7 @@ class VGG(AlexNet):
     def define_net(self):
         # for循环创建vgg块
         conv_blocks = []
-        in_channels = 1
+        in_channels, out_channels = 1, None
         # 卷积层部分
         for (num_convs, out_channels) in self.conv_arch:
             conv_blocks.append(self.vgg_block(num_convs, in_channels, out_channels))
@@ -299,41 +298,41 @@ class BatchNormLayer(nn.Module):
         self.moving_mean = torch.zeros(shape)
         self.moving_var = torch.ones(shape)
 
-    def forward(self, X):
+    def forward(self, x):
         # 如果X不在内存上，将moving_mean和moving_var
         # 复制到X所在显存上
-        if self.moving_mean.device != X.device:
-            self.moving_mean = self.moving_mean.to(X.device)
-            self.moving_var = self.moving_var.to(X.device)
+        if self.moving_mean.device != x.device:
+            self.moving_mean = self.moving_mean.to(x.device)
+            self.moving_var = self.moving_var.to(x.device)
         # 保存更新过的moving_mean和moving_var
-        Y, self.moving_mean, self.moving_var = self.batch_norm(X, self.gamma, self.beta, self.moving_mean,
+        y, self.moving_mean, self.moving_var = self.batch_norm(x, self.gamma, self.beta, self.moving_mean,
                                                                self.moving_var, eps=1e-5, momentum=0.9)
-        return Y
+        return y
 
     @staticmethod
-    def batch_norm(X, gamma, beta, moving_mean, moving_var, eps, momentum):
+    def batch_norm(x, gamma, beta, moving_mean, moving_var, eps, momentum):
         # 通过is_grad_enabled来判断当前模式是训练模式还是预测模式
         if not torch.is_grad_enabled():
             # 如果是在预测模式下，直接使用传入的移动平均所得的均值和方差
-            X_hat = (X - moving_mean) / torch.sqrt(moving_var + eps)
+            x_hat = (x - moving_mean) / torch.sqrt(moving_var + eps)
         else:
-            assert len(X.shape) in (2, 4)
-            if len(X.shape) == 2:
+            assert len(x.shape) in (2, 4)
+            if len(x.shape) == 2:
                 # 使用全连接层的情况，计算特征维上的均值和方差
-                mean = X.mean(dim=0)
-                var = ((X - mean) ** 2).mean(dim=0)
+                mean = x.mean(dim=0)
+                var = ((x - mean) ** 2).mean(dim=0)
             else:
                 # 使用二维卷积层的情况，计算通道维上（axis=1）的均值和方差。
                 # 这里我们需要保持X的形状以便后面可以做广播运算
-                mean = X.mean(dim=(0, 2, 3), keepdim=True)
-                var = ((X - mean) ** 2).mean(dim=(0, 2, 3), keepdim=True)
+                mean = x.mean(dim=(0, 2, 3), keepdim=True)
+                var = ((x - mean) ** 2).mean(dim=(0, 2, 3), keepdim=True)
             # 训练模式下，用当前的均值和方差做标准化
-            X_hat = (X - mean) / torch.sqrt(var + eps)
+            x_hat = (x - mean) / torch.sqrt(var + eps)
             # 更新移动平均的均值和方差
             moving_mean = momentum * moving_mean + (1.0 - momentum) * mean
             moving_var = momentum * moving_var + (1.0 - momentum) * var
-        Y = gamma * X_hat + beta  # 缩放和移位
-        return Y, moving_mean.data, moving_var.data
+        y = gamma * x_hat + beta  # 缩放和移位
+        return y, moving_mean.data, moving_var.data
 
 
 # 带批量规范化的LeNet网络
@@ -368,12 +367,12 @@ class ResidualBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(num_channels)
 
     def forward(self, x):
-        Y = nn.functional.relu(self.bn1(self.conv1(x)))
-        Y = self.bn2(self.conv2(Y))
+        y = nn.functional.relu(self.bn1(self.conv1(x)))
+        y = self.bn2(self.conv2(y))
         if self.conv3:
             x = self.conv3(x)
-        Y += x
-        return nn.functional.relu(Y)
+        y += x
+        return nn.functional.relu(y)
 
 
 class ResNet(GoogLeNet):
