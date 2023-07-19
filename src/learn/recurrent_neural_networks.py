@@ -2,13 +2,14 @@
 循环神经网络
 """
 import collections
+import math
 import random
 import re
 
 import torch
 from torch import nn
 
-from base.util import plot, load_array, download_d2l_data, try_gpu
+from base.util import plot, load_array, download_d2l_data, Timer, Accumulator, Animator, try_gpu
 from learn.base_block import BaseNet
 
 
@@ -188,45 +189,52 @@ class SeqDataLoader:
 class RNNModelScratch(BaseNet):
 
     """从零开始实现的循环神经网络模型"""
-    def __init__(self, vocab_size, num_hiddens, device, get_params, init_state, forward_fn):
+    def __init__(self, vocab_size, hidden_size):
         super().__init__()
-        self.vocab_size, self.num_hiddens = vocab_size, num_hiddens
-        self.params = get_params(vocab_size, num_hiddens, device)
-        self.init_state, self.forward_fn = init_state, forward_fn
+        self.vocab_size, self.hidden_size = vocab_size, hidden_size
 
-    def __call__(self, X, state):
-        X = nn.functional.one_hot(X.T, self.vocab_size).type(torch.float32)
-        return self.forward_fn(X, state, self.params)
+        self.normal_fn = lambda shape: torch.randn(size=shape, device=self.device) * 0.01
+        self.three_normal_fn = lambda input_size: (self.normal_fn((input_size, self.hidden_size)),
+                                                   self.normal_fn((self.hidden_size, self.hidden_size)),
+                                                   torch.zeros(self.hidden_size, device=self.device))
+        self.params = self.get_params()
 
-    def begin_state(self, batch_size, device):
-        return self.init_state(batch_size, self.num_hiddens, device)
+    def __call__(self, x, state):
+        x = nn.functional.one_hot(x.T, self.vocab_size).type(torch.float32)
+        return self.forward(x, state)
 
-    def get_params(self, vocab_size, num_hiddens, device):
-        num_inputs = num_outputs = vocab_size
+    def parameters(self):
+        return self.params
 
-        def normal(shape):
-            return torch.randn(size=shape, device=device) * 0.01
+    def get_params(self):
+        num_inputs = num_outputs = self.vocab_size
 
         # 隐藏层参数
-        W_xh = normal((num_inputs, num_hiddens))
-        W_hh = normal((num_hiddens, num_hiddens))
-        b_h = torch.zeros(num_hiddens, device=device)
+        W_xh = self.normal_fn((num_inputs, self.hidden_size))
+        W_hh = self.normal_fn((self.hidden_size, self.hidden_size))
+        b_h = torch.zeros(self.hidden_size, device=self.device)
         # 输出层参数
-        W_hq = normal((num_hiddens, num_outputs))
-        b_q = torch.zeros(num_outputs, device=device)
+        W_hq = self.normal_fn((self.hidden_size, num_outputs))
+        b_q = torch.zeros(num_outputs, device=self.device)
         # 附加梯度
         params = [W_xh, W_hh, b_h, W_hq, b_q]
         for param in params:
             param.requires_grad_(True)
         return params
 
-    def init_rnn_state(self, batch_size, num_hiddens, device):
-        # 函数在初始化时返回隐状态
-        return (torch.zeros((batch_size, num_hiddens), device=device),)
+    def init_state(self, batch_size):
+        # 在初始化时返回隐状态，张量全⽤0填充，形状为（批量⼤⼩，隐藏单元数，隐状态可能包含多变量，返回元组
+        return torch.zeros((batch_size, self.hidden_size), device=self.device),
 
-    def rnn(self, inputs, state, params):
+    def begin_state(self, batch_size):
+        return self.init_state(batch_size)
+
+    def forward(self, inputs, state):
+        """
+        个时间步内计算隐状态和输出
+        """
         # inputs的形状：(时间步数量，批量大小，词表大小)
-        W_xh, W_hh, b_h, W_hq, b_q = params
+        W_xh, W_hh, b_h, W_hq, b_q = self.params
         H, = state
         outputs = []
         # X的形状：(批量大小，词表大小)
@@ -238,19 +246,6 @@ class RNNModelScratch(BaseNet):
             outputs.append(Y)
         return torch.cat(outputs, dim=0), (H,)
 
-    def predict(self, prefix, num_preds, net, vocab, device):  # @save
-        """在prefix后面生成新字符"""
-        state = net.begin_state(batch_size=1, device=device)
-        outputs = [vocab[prefix[0]]]
-        get_input = lambda: torch.tensor([outputs[-1]], device=device).reshape((1, 1))
-        for y in prefix[1:]:  # 预热期
-            _, state = net(get_input(), state)
-            outputs.append(vocab[y])
-        for _ in range(num_preds):  # 预测num_preds步
-            y, state = net(get_input(), state)
-            outputs.append(int(y.argmax(dim=1).reshape(1)))
-        return ''.join([vocab.idx_to_token[i] for i in outputs])
-
 
 class RNNModel(nn.Module):
     """循环神经网络模型"""
@@ -258,14 +253,15 @@ class RNNModel(nn.Module):
         super(RNNModel, self).__init__(**kwargs)
         self.rnn = rnn_layer
         self.vocab_size = vocab_size
-        self.num_hiddens = self.rnn.hidden_size
+        self.hidden_size = self.rnn.hidden_size
         # 如果RNN是双向的（之后将介绍），num_directions应该是2，否则应该是1
         if not self.rnn.bidirectional:
             self.num_directions = 1
-            self.linear = nn.Linear(self.num_hiddens, self.vocab_size)
+            self.linear = nn.Linear(self.hidden_size, self.vocab_size)
         else:
             self.num_directions = 2
-            self.linear = nn.Linear(self.num_hiddens * 2, self.vocab_size)
+            self.linear = nn.Linear(self.hidden_size * 2, self.vocab_size)
+        self.to(try_gpu())
 
     def forward(self, inputs, state):
         X = nn.functional.one_hot(inputs.T.long(), self.vocab_size)
@@ -279,11 +275,166 @@ class RNNModel(nn.Module):
     def begin_state(self, device, batch_size=1):
         if not isinstance(self.rnn, nn.LSTM):
             # nn.GRU以张量作为隐状态
-            return torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.num_hiddens), device=device)
+            return torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.hidden_size), device=device)
         else:
             # nn.LSTM以元组作为隐状态
-            return (torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.num_hiddens), device=device),
-                    torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.num_hiddens), device=device))
+            return (torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.hidden_size), device=device),
+                    torch.zeros((self.num_directions * self.rnn.num_layers, batch_size, self.hidden_size), device=device))
+
+
+# ⻔控循环单元（gated recurrent units，GRU）
+class GRU(RNNModelScratch):
+
+    def get_params(self):
+        num_inputs = num_outputs = self.vocab_size
+        W_xz, W_hz, b_z = self.three_normal_fn(num_inputs)  # 更新门参数
+        W_xr, W_hr, b_r = self.three_normal_fn(num_inputs)  # 重置门参数
+        W_xh, W_hh, b_h = self.three_normal_fn(num_inputs)  # 候选隐状态参数
+        # 输出层参数
+        W_hq = self.normal_fn((self.hidden_size, num_outputs))
+        b_q = torch.zeros(num_outputs, device=self.device)
+        # 附加梯度
+        params = [W_xz, W_hz, b_z, W_xr, W_hr, b_r, W_xh, W_hh, b_h, W_hq, b_q]
+        for param in params:
+            param.requires_grad_(True)
+        return params
+
+    def init_state(self, batch_size):
+        return torch.zeros((batch_size, self.hidden_size), device=self.device),
+
+    def forward(self, inputs, state):
+        W_xz, W_hz, b_z, W_xr, W_hr, b_r, W_xh, W_hh, b_h, W_hq, b_q = self.params
+        H, = state
+        outputs = []
+        for X in inputs:
+            Z = torch.sigmoid((X @ W_xz) + (H @ W_hz) + b_z)
+            R = torch.sigmoid((X @ W_xr) + (H @ W_hr) + b_r)
+            H_tilda = torch.tanh((X @ W_xh) + ((R * H) @ W_hh) + b_h)
+            H = Z * H + (1 - Z) * H_tilda
+            Y = H @ W_hq + b_q
+            outputs.append(Y)
+        return torch.cat(outputs, dim=0), (H,)
+
+
+# ⻓短期记忆⽹络（long short-term memory，LSTM）
+class LSTM(RNNModelScratch):
+
+    def get_params(self):
+        num_inputs = num_outputs = self.vocab_size
+        W_xi, W_hi, b_i = self.three_normal_fn(num_inputs)  # 输入门参数
+        W_xf, W_hf, b_f = self.three_normal_fn(num_inputs)  # 遗忘门参数
+        W_xo, W_ho, b_o = self.three_normal_fn(num_inputs)  # 输出门参数
+        W_xc, W_hc, b_c = self.three_normal_fn(num_inputs)  # 候选记忆元参数
+        # 输出层参数
+        W_hq = self.normal_fn((self.hidden_size, num_outputs))
+        b_q = torch.zeros(num_outputs, device=self.device)
+        # 附加梯度
+        params = [W_xi, W_hi, b_i, W_xf, W_hf, b_f, W_xo, W_ho, b_o, W_xc, W_hc, b_c, W_hq, b_q]
+        for param in params:
+            param.requires_grad_(True)
+        return params
+
+    def init_state(self, batch_size):
+        return (torch.zeros((batch_size, self.hidden_size), device=self.device),
+                torch.zeros((batch_size, self.hidden_size), device=self.device))
+
+    def forward(self, inputs, state):
+        [W_xi, W_hi, b_i, W_xf, W_hf, b_f, W_xo, W_ho, b_o, W_xc, W_hc, b_c, W_hq, b_q] = self.params
+        (H, C) = state
+        outputs = []
+        for X in inputs:
+            I = torch.sigmoid((X @ W_xi) + (H @ W_hi) + b_i)
+            F = torch.sigmoid((X @ W_xf) + (H @ W_hf) + b_f)
+            O = torch.sigmoid((X @ W_xo) + (H @ W_ho) + b_o)
+            C_tilda = torch.tanh((X @ W_xc) + (H @ W_hc) + b_c)
+            C = F * C + I * C_tilda
+            H = O * torch.tanh(C)
+            Y = (H @ W_hq) + b_q
+            outputs.append(Y)
+        return torch.cat(outputs, dim=0), (H, C)
+
+
+class RNNTrainer(object):
+
+    def __init__(self, net: RNNModelScratch|nn.Module, loss_fn=nn.CrossEntropyLoss(), **kwargs):
+        self.net: RNNModelScratch|nn.Module = net
+        self.loss_fn = loss_fn
+        self.optimizer = None
+        self.device = try_gpu()
+
+    def grad_clipping(self, theta):
+        """裁剪梯度"""
+        if isinstance(self.net, nn.Module):
+            params = [p for p in self.net.parameters() if p.requires_grad]
+        else:
+            params = self.net.params
+        norm = torch.sqrt(sum(torch.sum((p.grad ** 2)) for p in params))
+        if norm > theta:
+            for param in params:
+                param.grad[:] *= theta / norm
+
+    def train_epoch(self, train_iter, use_random_iter):
+        """训练网络一个迭代周期（定义见第8章）"""
+        state, timer = None, Timer()
+        metric = Accumulator(2)  # 训练损失之和,词元数量
+        for X, Y in train_iter:
+            if state is None or use_random_iter:
+                # 在第一次迭代或使用随机抽样时初始化state
+                state = self.net.begin_state(batch_size=X.shape[0])
+            else:
+                if isinstance(self.net, nn.Module) and not isinstance(state, tuple):
+                    # state对于nn.GRU是个张量
+                    state.detach_()
+                else:
+                    # state对于nn.LSTM或对于我们从零开始实现的模型是个张量
+                    for s in state:
+                        s.detach_()
+            y = Y.T.reshape(-1)
+            X, y = X.to(self.device), y.to(self.device)
+            y_hat, state = self.net(X, state)
+            loss = self.loss_fn(y_hat, y.long()).mean()
+            if isinstance(self.optimizer, torch.optim.Optimizer):
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.grad_clipping(1)
+                self.optimizer.step()
+            else:
+                loss.backward()
+                self.grad_clipping(1)
+                # 因为已经调用了mean函数
+                self.optimizer(batch_size=1)
+            metric.add(loss * y.numel(), y.numel())
+        return math.exp(metric[0] / metric[1]), metric[1] / timer.stop()
+
+    def train(self, train_iter, vocab, learning_rate, epochs_size, use_random_iter=False):
+        """训练模型（定义见第8章）"""
+        loss = nn.CrossEntropyLoss()
+        animator = Animator(xlabel='epoch', ylabel='perplexity', legend=['train'], xlim=[10, epochs_size])
+        # 初始化
+        self.optimizer = torch.optim.SGD(self.net.parameters(), learning_rate)
+        predict = lambda prefix: self.predict(prefix, 50, vocab)
+        # 训练和预测
+        for epoch in range(epochs_size):
+            ppl, speed = self.train_epoch(train_iter, use_random_iter)
+            if (epoch + 1) % 10 == 0:
+                print(predict('time traveller'))
+                animator.add(epoch + 1, [ppl])
+        print(f'困惑度 {ppl:.1f}, {speed:.1f} 词元/秒 {str(self.device)}')
+        print(predict('time traveller'))
+        print(predict('traveller'))
+
+    def predict(self, prefix, predict_step_size, vocab):
+        """在prefix后面生成新字符"""
+        state = self.net.begin_state(batch_size=1)
+        outputs = [vocab[prefix[0]]]
+        get_input = lambda: torch.tensor([outputs[-1]], device=self.device).reshape((1, 1))
+        for y in prefix[1:]:  # 预热期
+            _, state = self.net(get_input(), state)
+            outputs.append(vocab[y])
+        for _ in range(predict_step_size):  # 预测 predict_step_size 步
+            y, state = self.net(get_input(), state)
+            outputs.append(int(y.argmax(dim=1).reshape(1)))
+        return ''.join([vocab.idx_to_token[i] for i in outputs])
 
 
 def test_sin_predict(show_plot=False):
@@ -342,6 +493,54 @@ def test_vocab():
         print('索引:', vocab[tokens[i]])
 
 
+def load_data_time_machine(batch_size, num_steps, use_random_iter=False, max_tokens=10000):
+    """Return the iterator and the vocabulary of the time machine dataset."""
+    data_iter = SeqDataLoader(batch_size, num_steps, use_random_iter, max_tokens)
+    return data_iter, data_iter.vocab
+
+
+def test_rnn_scratch():
+    batch_size, num_steps, hidden_size = 32, 35, 512
+    train_iter, vocab = load_data_time_machine(batch_size, num_steps)
+    input_size = len(vocab)
+    X = torch.arange(10).reshape((2, 5))
+    rnn_net = RNNModelScratch(input_size, hidden_size)
+    state = rnn_net.init_state(X.shape[0])
+    Y, new_state = rnn_net(X.to(rnn_net.device), state)
+    print(Y.shape, len(new_state), new_state[0].shape)
+
+    num_epochs, lr = 500, 1
+    trainer = RNNTrainer(rnn_net)
+    trainer.train(train_iter, vocab, lr, num_epochs)
+
+    # 简洁实现的GRU
+    gru_layer = nn.GRU(input_size, hidden_size)
+    model = RNNModel(gru_layer, input_size)
+    trainer = RNNTrainer(model)
+    trainer.train(train_iter, vocab, lr, num_epochs)
+
+    # 简洁实现的LSTM
+    lstm_layer = nn.LSTM(input_size, hidden_size)
+    model = RNNModel(lstm_layer, input_size)
+    trainer = RNNTrainer(model)
+    trainer.train(train_iter, vocab, lr, num_epochs)
+
+    # 多层循环神经⽹络所
+    vocab_size, hidden_size, num_layers = len(vocab), 256, 2
+    num_inputs = vocab_size
+    lstm_layer = nn.LSTM(num_inputs, hidden_size, num_layers)
+    model = RNNModel(lstm_layer, len(vocab))
+    trainer = RNNTrainer(model)
+    trainer.train(train_iter, vocab, lr, num_epochs)
+
+    # 双向循环神经⽹络使⽤了过去的和未来的数据，用得比较少
+    lstm_layer = nn.LSTM(num_inputs, hidden_size, bidirectional=True)
+    model = RNNModel(lstm_layer, len(vocab))
+    trainer = RNNTrainer(model)
+    trainer.train(train_iter, vocab, lr, num_epochs)
+
+
 if __name__ == '__main__':
     # test_sin_predict()
-    test_vocab()
+    # test_vocab()
+    test_rnn_scratch()
