@@ -26,12 +26,8 @@ def load_data_fashion_mnist(batch_size, resize=None):
         trans.insert(0, transforms.Resize(resize))
     trans = transforms.Compose(trans)
 
-    with_download = False
-    if not os.path.isdir( r'data\FashionMNIST\t10k-images-idx3-ubyte.gz'):
-        # 如果没有下载文件则设置需要下载
-        with_download = True
-    mnist_train = torchvision.datasets.FashionMNIST(root="data", train=True, transform=trans, download=with_download)
-    mnist_test = torchvision.datasets.FashionMNIST(root="data", train=False, transform=trans, download=with_download)
+    mnist_train = torchvision.datasets.FashionMNIST(root="data", train=True, transform=trans, download=True)
+    mnist_test = torchvision.datasets.FashionMNIST(root="data", train=False, transform=trans, download=True)
     # CPU 不能带参数 num_workers=DATA_LOADER_WORKERS
     return (data.DataLoader(mnist_train, batch_size, shuffle=True),
             data.DataLoader(mnist_test, batch_size, shuffle=False))

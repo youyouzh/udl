@@ -413,8 +413,6 @@ def resnet_block_seq(in_channels, out_channels, num_residuals, first_block=False
 
 def res_net_18(num_classes, in_channels=1, *args, **kwargs) -> nn.Sequential:
     """A slightly modified ResNet-18 model."""
-    super().__init__(*args, **kwargs)
-
     # This model uses a smaller convolution kernel, stride, and padding and
     # removes the maximum pooling layer
     net = nn.Sequential(

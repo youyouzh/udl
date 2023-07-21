@@ -9,7 +9,9 @@ from torch.utils import data
 from base.util import try_gpu, show_images, download_extract
 
 # 全局数据集存放路径
-DATA_DIR = os.path.join(os.path.abspath(__file__), 'data')
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+if not os.path.isdir(DATA_DIR):
+    os.makedirs(DATA_DIR)
 DATA_LOAD_WORKERS = 0  # 需要GPU才可以设置多个WORK
 device = try_gpu()
 
@@ -34,17 +36,12 @@ class CIFA10DataSet(object):
 
     @staticmethod
     def load_cifar_10(is_train, augmentations, batch_size):
-        CIFA10DataSet.download_cifar_10_data()
         dataset = torchvision.datasets.CIFAR10(root=DATA_DIR, train=is_train, transform=augmentations, download=True)
         dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=is_train, num_workers=DATA_LOAD_WORKERS)
         return dataloader
 
-    @staticmethod
-    def example():
-        CIFA10DataSet.download_cifar_10_data()
 
-
-class HotDogDataSet(object):
+class HotDogDataSet(torchvision.datasets.VisionDataset):
 
     @staticmethod
     def download():
