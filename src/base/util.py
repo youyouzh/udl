@@ -1,5 +1,7 @@
 import os
+import tarfile
 import time
+import zipfile
 
 import requests
 import torch
@@ -203,6 +205,21 @@ def download_d2l_data(filename, cache_dir=None):
     with open(filepath, 'wb') as f:
         f.write(response.content)
     return filepath
+
+
+def download_extract(filename, folder=None):
+    """Download and extract a zip/tar file."""
+    filepath = download_d2l_data(filename)
+    base_dir = os.path.dirname(filepath)
+    data_dir, ext = os.path.splitext(filepath)
+    if ext == '.zip':
+        fp = zipfile.ZipFile(filepath, 'r')
+    elif ext in ('.tar', '.gz'):
+        fp = tarfile.open(filepath, 'r')
+    else:
+        assert False, 'Only zip/tar files can be extracted.'
+    fp.extractall(base_dir)
+    return os.path.join(base_dir, folder) if folder else data_dir
 
 
 def show_images(images, num_rows, num_cols, titles=None, scale=1.5):
