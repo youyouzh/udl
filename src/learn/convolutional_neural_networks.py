@@ -375,6 +375,18 @@ class ResidualBlock(nn.Module):
         return nn.functional.relu(y)
 
 
+def resnet_block(input_channels, num_channels, num_residuals, first_block=False):
+    # 第⼀个模块的通道数同输⼊通道数⼀致。由于之前已经使⽤了步幅为2的最⼤汇聚层，所以⽆须减⼩⾼和宽。
+    # 之后的每个模块在第⼀个残差块⾥将上⼀个模块的通道数翻倍，并将⾼和宽减半。
+    blocks = []
+    for i in range(num_residuals):
+        if i == 0 and not first_block:
+            blocks.append(ResidualBlock(input_channels, num_channels, use_1x1conv=True, strides=2))
+        else:
+            blocks.append(ResidualBlock(num_channels, num_channels))
+    return blocks
+
+
 class ResNet(GoogLeNet):
 
     def define_net(self):
@@ -385,26 +397,36 @@ class ResNet(GoogLeNet):
                            nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
         # GoogLeNet在后⾯接了4个由Inception块组成的模块。ResNet则使⽤4个由残差块组成的模块，每个模块使⽤若⼲个同样输出通道数的残差块
         # 接着在ResNet加⼊所有残差块，这⾥每个模块使⽤2个残差块
-        b2 = nn.Sequential(*self.resnet_block(64, 64, 2, first_block=True))
-        b3 = nn.Sequential(*self.resnet_block(64, 128, 2))
-        b4 = nn.Sequential(*self.resnet_block(128, 256, 2))
-        b5 = nn.Sequential(*self.resnet_block(256, 512, 2))
+        b2 = nn.Sequential(*resnet_block(64, 64, 2, first_block=True))
+        b3 = nn.Sequential(*resnet_block(64, 128, 2))
+        b4 = nn.Sequential(*resnet_block(128, 256, 2))
+        b5 = nn.Sequential(*resnet_block(256, 512, 2))
         # 最后，与GoogLeNet⼀样，在ResNet中加⼊全局平均汇聚层，以及全连接层输出
         self.net = nn.Sequential(b1, b2, b3, b4, b5,
                                  nn.AdaptiveAvgPool2d((1, 1)),
                                  nn.Flatten(), nn.Linear(512, 10))
 
-    @staticmethod
-    def resnet_block(input_channels, num_channels, num_residuals, first_block=False):
-        # 第⼀个模块的通道数同输⼊通道数⼀致。由于之前已经使⽤了步幅为2的最⼤汇聚层，所以⽆须减⼩⾼和宽。
-        # 之后的每个模块在第⼀个残差块⾥将上⼀个模块的通道数翻倍，并将⾼和宽减半。
-        blocks = []
-        for i in range(num_residuals):
-            if i == 0 and not first_block:
-                blocks.append(ResidualBlock(input_channels, num_channels, use_1x1conv=True, strides=2))
-            else:
-                blocks.append(ResidualBlock(num_channels, num_channels))
-        return blocks
+
+def resnet_block_seq(in_channels, out_channels, num_residuals, first_block=False):
+    return nn.Sequential(*resnet_block(in_channels, out_channels, num_residuals, first_block))
+
+
+def res_net_18(num_classes, in_channels=1, *args, **kwargs) -> nn.Sequential:
+    """A slightly modified ResNet-18 model."""
+    super().__init__(*args, **kwargs)
+
+    # This model uses a smaller convolution kernel, stride, and padding and
+    # removes the maximum pooling layer
+    net = nn.Sequential(
+        nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1),
+        nn.BatchNorm2d(64), nn.ReLU())
+    net.add_module("resnet_block1", resnet_block_seq(64, 64, 2, first_block=True))
+    net.add_module("resnet_block2", resnet_block_seq(64, 128, 2))
+    net.add_module("resnet_block3", resnet_block_seq(128, 256, 2))
+    net.add_module("resnet_block4", resnet_block_seq(256, 512, 2))
+    net.add_module("global_avg_pool", nn.AdaptiveAvgPool2d((1, 1)))
+    net.add_module("fc", nn.Sequential(nn.Flatten(), nn.Linear(512, num_classes)))
+    return net
 
 
 # 稠密块
