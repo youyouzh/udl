@@ -7,7 +7,7 @@ from torch.utils import data
 from torchvision import transforms
 
 from base.util import plt, plot, Accumulator, Animator, sgd, show_images
-from linear_regression import ManualLinearRegression
+from learn.linear_regression import ManualLinearRegression
 
 DATA_LOADER_WORKERS = 4
 

@@ -5,8 +5,8 @@ import torch
 from torch import nn
 
 from base.util import Accumulator, Animator, Timer
-from multilayer_perceptron import MultilayerPerceptron
-from softmax_regression import load_data_fashion_mnist
+from learn.multilayer_perceptron import MultilayerPerceptron
+from learn.softmax_regression import load_data_fashion_mnist
 
 
 # 自定义一个简单的卷积层
