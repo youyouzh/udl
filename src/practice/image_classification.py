@@ -12,7 +12,8 @@ from PIL import Image
 
 from base.datasets import CIFA10DataSet, HotDogDataSet
 from base.trainer import BaseTrainer
-from base.util import plt, show_images, try_all_gpus, Timer, Animator, Accumulator
+from base.util import plt, show_images, Timer, Animator, Accumulator
+from base import u_log as log
 from learn.convolutional_neural_networks import res_net_18
 
 
@@ -83,6 +84,7 @@ class ResNetTrainer(BaseTrainer):
         optimizer.step()
         train_loss_sum = loss.sum()
         train_acc_sum = BaseTrainer.accuracy(pred, y)
+        log.info('train batch finish. loss: {}, acc sum: {}'.format(train_loss_sum, train_acc_sum))
         return train_loss_sum, train_acc_sum
 
     @staticmethod
@@ -107,19 +109,21 @@ class ResNetTrainer(BaseTrainer):
                                   None))
             test_acc = BaseTrainer.evaluate_accuracy_gpu(net, test_data_iter)
             animator.add(epoch + 1, (None, None, test_acc))
-        print(f'loss {metric[0] / metric[2]:.3f}, train acc '
-              f'{metric[1] / metric[3]:.3f}, test acc {test_acc:.3f}')
-        print(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec on '
-              f'{str(devices)}')
+            log.info('finish epoch train. test acc: {}'.format(test_acc))
+        log.info(f'loss: {metric[0] / metric[2]:.3f}, train acc: {metric[1] / metric[3]:.3f}, test acc: {test_acc:.3f}')
+        log.info(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec on {str(devices)}')
+        animator.show()
 
     @staticmethod
     def train_with_data_aug(train_augs, test_augs, net, lr=0.001, batch_size=256):
+        log.info('begin train with data aug')
         train_data_iter = CIFA10DataSet.load_cifar_10(True, train_augs, batch_size)
         test_test_iter = CIFA10DataSet.load_cifar_10(False, test_augs, batch_size)
 
         loss_fn = nn.CrossEntropyLoss(reduction="none")
         optimizer = torch.optim.Adam(net.parameters(), lr=lr)
         ResNetTrainer.train(net, train_data_iter, test_test_iter, loss_fn, optimizer, num_epochs=10)
+        log.info('end train with data aug')
 
     @staticmethod
     def example():
@@ -132,7 +136,7 @@ class ResNetTrainer(BaseTrainer):
             torchvision.transforms.ToTensor()])
         # 使用图像增广时，train acc更小，而 test acc更大，train loss 更小，这说明图像增广减轻了过拟合
         # 把亮度色调那些变换都开，设置为0.5，测试精度直接增加了1个多点
-        ResNetTrainer.train_with_data_aug(train_augs, test_augs, net)
+        ResNetTrainer.train_with_data_aug(train_augs, test_augs, net, lr=0.01)
 
 
 class ResNetFineTuneTrainer(ResNetTrainer):
@@ -184,6 +188,7 @@ class ResNetFineTuneTrainer(ResNetTrainer):
 
     @staticmethod
     def train_fine_tuning(net, train_data_iter, test_data_iter, learning_rate, num_epochs=5, param_group=True):
+        log.info('begin train with fine tuning.')
         loss = nn.CrossEntropyLoss(reduction="none")
         if param_group:
             # 如果param_group=True，输出层中的模型参数将使用十倍的学习率
@@ -198,6 +203,6 @@ class ResNetFineTuneTrainer(ResNetTrainer):
 
 
 if __name__ == '__main__':
-    ImageAugmentation.example()
-    # ResNetTrainer.example()
+    # ImageAugmentation.example()
+    ResNetTrainer.example()
     # ResNetFineTuneTrainer.example()
