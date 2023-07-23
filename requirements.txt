@@ -4,6 +4,9 @@
 # numpy==1.25.1  # contain in torch
 torch==2.0.1
 torchvision==0.15.2
+# cuda version
+# torch==1.13.1+cu116
+# torchvision==0.14.1+cu116
 
 # d2l book，最新的0.17.6版本有冲突
 # d2l==0.17.0
