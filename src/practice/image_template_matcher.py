@@ -63,10 +63,9 @@ def pos_transform(position, transform_mat: numpy.ndarray) -> numpy.ndarray:
     return cv2.perspectiveTransform(numpy.float32([[position]]), transform_mat)[0][0]
 
 
-def image_position_transform(image: numpy.ndarray, transform_mat: numpy.ndarray) -> numpy.ndarray:
-    h, w, d = image.shape
-    pts = numpy.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-    return cv2.perspectiveTransform(pts, transform_mat)
+def image_position_transform(pts: numpy.ndarray | list, transform_mat: numpy.ndarray) -> numpy.ndarray:
+    pts = numpy.float32(pts).reshape(-1, 1, 2)
+    return numpy.int32(cv2.perspectiveTransform(pts, transform_mat))
 
 
 # 使用opencv中的match_template方法实现定位你
@@ -132,50 +131,39 @@ class ImageTemplateMatcher(object):
         kwargs['limit'] = 1
         points = tuple(self.locate_all(haystack_image, needle_image, **kwargs))
         if len(points) > 0:
-            return points[0]
+            box = points[0]
+            if self.debug_mode:
+                cv2.rectangle(haystack_image, (box.left, box.top),
+                              (box.left + box.width, box.top + box.height), (0, 0, 255), 2)
+                cv2.imshow('base image', haystack_image)
+                cv2.waitKey(0)
+            return box
         return None
 
     def evaluate(self):
-        base_image_path = r'data\images\base.png'
+        base_image_path = r'images/base.png'
         target_image_paths = [
-            r'data\images\target-person.png',
-            r'data\images\target-right.png',
-            r'data\images\target-sm.png',
-            r'data\images\target-sz.png',
-            r'data\images\target-resize-1.png',
-            r'data\images\target-resize-2.png',
-            r'data\images\target-resize-3.png',
+            # r'images\template-duanwei.png',
+            r'images\template-resize.png',
         ]
 
-        base_image = cv2.imread(base_image_path)
         for target_image_path in target_image_paths:
             box = self.locate(base_image_path, target_image_path)
             if box is None:
                 log.warn('can not locate result for template: {}'.format(target_image_path))
                 continue
             log.info('locate result: {} for template: {}'.format(box, target_image_path))
-            cv2.rectangle(base_image, (box.left, box.top),
-                          (box.left + box.width, box.top + box.height), (0, 0, 255), 2)
-        cv2.imshow('base image', base_image)
-        cv2.waitKey(0)
 
 
-# 使用图片Sift特征来进行匹配
+# 使用图片Sift特征来进行匹配，适合于目标特征丰富，画面信息丰富的图片，图片缩放也能匹配上
 class OrbImageTemplateMatcher(ImageTemplateMatcher):
 
     def __init__(self):
         super().__init__()
         self.homography_mat = None
+        self.grayscale_default = False
 
-    def locate(self, haystack_image, needle_image, **kwargs):
-        haystack_image = load_image_cv2(haystack_image, self.grayscale_default)
-        needle_image = load_image_cv2(needle_image, self.grayscale_default)
-
-        # 提取sift特征，需要安装相应的库： pip install opencv-contrib-python
-        feature_extractor = cv2.ORB_create(nfeatures=5000)
-        haystack_kp, haystack_desc = feature_extractor.detectAndCompute(haystack_image, None)
-        needle_kp, needle_desc = feature_extractor.detectAndCompute(needle_image, None)
-
+    def get_match_good_pts(self, haystack_desc, needle_desc):
         # FLANN特征匹配器
         index_params = dict(algorithm=6,
                             table_number=6,  # 12
@@ -201,17 +189,40 @@ class OrbImageTemplateMatcher(ImageTemplateMatcher):
         if len(good_matches) < min_match_count:
             log.error('good matches is less than {}'.format(min_match_count))
             return None
+        return good_matches, matches_mask
 
-        src_pts = numpy.float32([haystack_kp[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = numpy.float32([needle_kp[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        homography_mat, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-        self.homography_mat = homography_mat
+    def locate(self, haystack_image, needle_image, **kwargs):
+        haystack_image = load_image_cv2(haystack_image, self.grayscale_default)
+        needle_image = load_image_cv2(needle_image, self.grayscale_default)
+
+        # 提取sift特征，需要安装相应的库： pip install opencv-contrib-python
+        feature_extractor = cv2.ORB_create(nfeatures=5000)
+        haystack_kp, haystack_desc = feature_extractor.detectAndCompute(haystack_image, None)
+        needle_kp, needle_desc = feature_extractor.detectAndCompute(needle_image, None)
+
+        # 获取匹配的特征点
+        good_matches, matches_mask = self.get_match_good_pts(haystack_desc, needle_desc)
+
+        # 根据特征点获取映射矩阵
+        haystack_pts = numpy.float32([haystack_kp[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        needle_pts = numpy.float32([needle_kp[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        homography_mat, mask = cv2.findHomography(needle_pts, haystack_pts, cv2.RANSAC, 5.0)  # 从匹配图到原图的映射
+        self.homography_mat, _ = cv2.findHomography(haystack_pts, needle_pts, cv2.RANSAC, 5.0)   # 从原图到匹配图的映射
+
+        # 返回匹配查找变化后的坐标
+        h, w, d = needle_image.shape
+        dst = image_position_transform([[0, 0], [w - 1, h - 1]], homography_mat).reshape(-1, 2)
+        box = Box(dst[0][0], dst[0][1], dst[1][0] - dst[0][0], dst[1][1] - dst[0][1])
 
         # 调试模式展示结果
         if self.debug_mode:
+            # 标记匹配位置的边框
+            cv2.rectangle(haystack_image, (dst[0][0], dst[0][1]), (dst[1][0], dst[1][1]), (0, 0, 255), 2)
             matches_mask = mask.ravel().tolist()
-            dst = image_position_transform(haystack_image, homography_mat)
-            line_image = cv2.polylines(needle_image, [numpy.int32(dst)], True, (0, 0, 255), 10, cv2.LINE_AA)
+            h, w, d = haystack_image.shape
+            dst = image_position_transform([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]], homography_mat)
+            line_image = cv2.polylines(needle_image, [dst], True, (0, 0, 255), 10, cv2.LINE_AA)
+
             draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
                                singlePointColor=None,
                                matchesMask=matches_mask,  # draw only inliers
@@ -220,17 +231,48 @@ class OrbImageTemplateMatcher(ImageTemplateMatcher):
                                      good_matches, None, **draw_params)
             result = cv2.pyrDown(result)
             cv2.imshow('Result', result)
-            cv2.waitKey(1)
+            cv2.waitKey(0)
+        return box
 
-        # 返回匹配查找变化后的坐标
-        position = image_position_transform(needle_image, homography_mat)
-        position = numpy.int32(position.reshape(-1, 2))
-        return Box(position[0][0], position[0][1], position[2][0] - position[0][1], position[2][1])
+
+# 图像映射器，通过特征匹配，得到一个图片到另一个图片的变换矩阵，通过这个变换矩阵来定位变形后的坐标
+class ImageHomographyTransform(OrbImageTemplateMatcher):
+
+    def __init__(self, base_image, target_image):
+        """
+        基准图片，后面的映射都是基于该坐标
+        :param base_image: 基准图像
+        :param target_image: 变形后的目标图像
+        """
+        super().__init__()
+        # 得到 self.homography_mat 映射矩阵
+        self.locate(base_image, target_image)
+
+    # 位置映射
+    def transform_position(self, position: list | tuple):
+        assert len(position) == 2
+        transformed_pts = image_position_transform([position], self.homography_mat)
+        return transformed_pts.reshape(2)
+
+    @staticmethod
+    def example():
+        base_image = r'images\base.png'
+        target_image = r'images\template-resize-full.png'
+        begin_game_box = Box(left=1048, top=193, width=686, height=245)
+        transform = ImageHomographyTransform(base_image, target_image)
+        left, top = transform.transform_position([begin_game_box.left, begin_game_box.top])
+        right, bottom = transform.transform_position([begin_game_box.left + begin_game_box.width, begin_game_box.top + begin_game_box.height])
+
+        target_image = load_image_cv2(target_image, False)
+        cv2.rectangle(target_image, (left, top), (right, bottom), (0, 0, 255), 2)
+        cv2.imshow('target_image', target_image)
+        cv2.waitKey(0)
 
 
 if __name__ == '__main__':
     # template_matcher = ImageTemplateMatcher()
-    template_matcher = OrbImageTemplateMatcher()
-    template_matcher.grayscale_default = False
-    template_matcher.debug_mode = True
-    template_matcher.evaluate()
+    ImageHomographyTransform.example()
+    # template_matcher = OrbImageTemplateMatcher()
+    # template_matcher.grayscale_default = False
+    # template_matcher.debug_mode = True
+    # template_matcher.evaluate()
