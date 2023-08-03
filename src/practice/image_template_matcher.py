@@ -55,6 +55,27 @@ def load_image_cv2(img, grayscale=False) -> numpy.ndarray:
     return img_cv
 
 
+def calculate_image_similarity(img1: numpy.ndarray, img2: numpy.ndarray, debug_mode=False):
+    """计算图片相似度"""
+    assert (len(img1.shape) == len(img2.shape) == 3)
+    if img1.shape[0] < img2.shape[0]:
+        img1, img2 = img2, img1
+    n, m, c = img2.shape
+    img1 = cv2.resize(img1, (m, n))
+    if debug_mode:
+        cv2.imshow('diff', numpy.uint8(numpy.abs(numpy.float32(img1) - numpy.float32(img2))))
+        cv2.waitKey(1)
+    ksize = max(1, min(n, m) // 50)
+    img1 = cv2.blur(img1, ksize=(ksize, ksize))
+    img2 = cv2.blur(img2, ksize=(ksize, ksize))
+    img1 = numpy.float32(img1)
+    img2 = numpy.float32(img2)
+    if debug_mode:
+        cv2.imshow('bit', numpy.uint8((numpy.abs(img1 - img2) < 30).sum(2) == 3) * 255)
+        cv2.waitKey(1)
+    return ((numpy.abs(img1 - img2) < 30).sum(2) == 3).sum() / (n * m)
+
+
 def pos_transform(position, transform_mat: numpy.ndarray) -> numpy.ndarray:
     """
     通过转换矩阵来变换坐标，position示例: (200, 200)
@@ -64,6 +85,9 @@ def pos_transform(position, transform_mat: numpy.ndarray) -> numpy.ndarray:
 
 
 def image_position_transform(pts: numpy.ndarray | list, transform_mat: numpy.ndarray) -> numpy.ndarray:
+    """
+    通过转换矩阵来变换坐标，position示例: (200, 200)
+    """
     pts = numpy.float32(pts).reshape(-1, 1, 2)
     return numpy.int32(cv2.perspectiveTransform(pts, transform_mat))
 
@@ -207,7 +231,7 @@ class OrbImageTemplateMatcher(ImageTemplateMatcher):
         haystack_pts = numpy.float32([haystack_kp[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
         needle_pts = numpy.float32([needle_kp[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
         homography_mat, mask = cv2.findHomography(needle_pts, haystack_pts, cv2.RANSAC, 5.0)  # 从匹配图到原图的映射
-        self.homography_mat, _ = cv2.findHomography(haystack_pts, needle_pts, cv2.RANSAC, 5.0)   # 从原图到匹配图的映射
+        self.homography_mat, _ = cv2.findHomography(haystack_pts, needle_pts, cv2.RANSAC, 5.0)  # 从原图到匹配图的映射
 
         # 返回匹配查找变化后的坐标
         h, w, d = needle_image.shape
@@ -261,7 +285,8 @@ class ImageHomographyTransform(OrbImageTemplateMatcher):
         begin_game_box = Box(left=1048, top=193, width=686, height=245)
         transform = ImageHomographyTransform(base_image, target_image)
         left, top = transform.transform_position([begin_game_box.left, begin_game_box.top])
-        right, bottom = transform.transform_position([begin_game_box.left + begin_game_box.width, begin_game_box.top + begin_game_box.height])
+        right, bottom = transform.transform_position(
+            [begin_game_box.left + begin_game_box.width, begin_game_box.top + begin_game_box.height])
 
         target_image = load_image_cv2(target_image, False)
         cv2.rectangle(target_image, (left, top), (right, bottom), (0, 0, 255), 2)
