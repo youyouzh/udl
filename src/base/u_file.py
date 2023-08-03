@@ -13,7 +13,7 @@ import urllib.parse
 import requests
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
-import u_log as log
+import base.u_log as log
 
 __all__ = [
     'convert_windows_path',
