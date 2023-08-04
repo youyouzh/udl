@@ -12,7 +12,11 @@ torchvision==0.14.1+cu116
 # d2l==0.17.0
 
 # 图像处理框架，比如YOLO系列，SAM
-ultralytics
+ultralytics==8.0.147
+
+# pip install opencv-python，opencv
+# pyautogui==0.9.54
+opencv-python==4.8.0.74
 
 # for majsoul
 mitmproxy==9.0.1
