@@ -18,7 +18,16 @@ ultralytics==8.0.147
 # pyautogui==0.9.54
 opencv-python==4.8.0.74
 
+# 高性能截屏库
+dxcam==0.0.5
+
 # for majsoul
 mitmproxy==9.0.1
 protobuf==3.16.0
 requests
+
+# win32, ui lib
+# pyperclip==1.8.2  # 依赖qt5，体积比较大，使用win32clipboard（包含在pywin32中）
+pyautogui==0.9.54
+pywin32==306
+psutil==5.9.5
