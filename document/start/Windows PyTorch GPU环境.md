@@ -11,16 +11,18 @@
 在cmd中输入命令`nvidia-smi`可以查看显卡信息，以及支持的CUDA版本。
 
 - 查看显卡算力： [点击查看显卡算力表](https://developer.nvidia.com/cuda-gpus)，有不同显卡的算力，算力至少3.5以上才能安装CUDA
-- 查看显卡驱动版本： [点击下载更新驱动](https://www.nvidia.com/Download/index.aspx)，右键空白地方 -> NIVIDIA 控制面板 -> 左下角系统消息 -> 显示 -> 查看驱动版本
-- 查看显卡支持CUDA版本： [点击查看显卡驱动对于CUDA版本](https://docs.nvidia.com/cuda/archive/10.0/cuda-toolkit-release-notes/index.html)，按照步骤3，点击组件，其中有`NVCUDA.dll`，就是当前支持的CUDA版本
+- 查看显卡驱动版本： [点击下载更新驱动](https://www.nvidia.com/Download/index.aspx)，右键桌面空白地方 -> NIVIDIA 控制面板 -> 左下角系统消息 -> 显示 -> 查看驱动版本
+- 查看显卡支持CUDA版本： [点击查看显卡驱动对应CUDA版本](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html)
 - 安装Visual Studio 2015、2017 和 2019 的 Microsoft Visual C++ 可再发行组件： [软件下载地址](https://support.microsoft.com/zh-cn/help/2977003/the-latest-supported-visual-c-downloads)，下载并安装`vc_redist.x64.exe`，安装完要重启
 - 安装CUDA： [CUDA下载地址](https://developer.nvidia.com/cuda-toolkit-archive)，通过上面几步，找到合适自己环境版本的CUDA，**版本一定要对得上**
 - 安装cuDNN，cuDNN（CUDA Deep Neural Network library）是NVIDIA打造的针对深度神经网络的加速库，[cuDNN地址](https://developer.nvidia.com/rdp/cudnn-archive)，注意要和CUDA版本匹配，下载后解压分别替换CUDA安装目录下的文件夹`include`、`lib`、`bin`即可
 
-这儿安装[CUDA-11.6.0](https://developer.nvidia.com/cuda-11-6-2-download-archive)，下载后直接安装即可。安装完成后需要添加下面的环境变量：
+PyTorch-2.0.1版本需要CUDA-11.7和CUDA-11.8，这儿安装[CUDA-11.8.0](https://developer.nvidia.com/cuda-11-8-0-download-archive)，下载后直接安装即可，推荐下载`exe(local)`离线安装包，联网有时候比较慢，安装完成后需要添加下面的环境变量：
 
-- CUDA_PATH: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6`
-- CUDA_PATH_V11_6: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6`
+如果本机电脑已经安装了其他版本的CUDA，可以先卸载也可以不用管，但是需要去掉旧版本的环境变量配置，否则可能会冲突。
+
+- CUDA_PATH: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8`
+- CUDA_PATH_V11_6: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8`
 - NVTOLLSEXT_PATH: `C:\Program Files\NVIDIA GPU Computing Toolkit\NvTollsExt`
 - Path中需要将`include`、`bin`、`lib`、`libnvvp`四个目录都添加到进去
 
@@ -28,7 +30,7 @@
 
 ### 安装PyTorch的GPU版本
 
-可以到官网下载PyTorch的GPU版本：<https://pytorch.org/get-started/previous-versions/>，也可以直接安装，注意如果之前安装过CPU版本，需要先卸载掉。注意版本号中待cu的表示GPU版本，否则表示CPU版本。
+可以到官网下载PyTorch的GPU版本：<https://pytorch.org/get-started/previous-versions/>，也可以直接安装，注意如果之前安装过CPU版本，需要先卸载掉。注意版本号中带cu的表示GPU版本，否则表示CPU版本。
 
 ```shell
 # 查看安装的包版本
