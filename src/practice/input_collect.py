@@ -72,13 +72,14 @@ def get_window_process_info(hwnd):
     return process
 
 
-def screenshot_by_dxcam(region=None) -> numpy.ndarray | None:
+def screenshot_by_dxcam(region=None, gpu_index=0, monitor_index=0) -> numpy.ndarray | None:
     """
     获取屏幕渲染帧，如果没有新帧，则返回为空，速度非常快，支持240Hz
+    格式为：region = (left, top, right, bottom)
     参考：<https://github.com/ra1nty/DXcam>
     """
     # DXCamera instances for: [monitor0, GPU0]，显示器1，GPU0
-    camera = dxcam.create(device_idx=0, output_idx=0, output_color="BGR")
+    camera = dxcam.create(device_idx=gpu_index, output_idx=monitor_index, output_color="BGR")
     frame = camera.grab(region=region)
     return frame
 

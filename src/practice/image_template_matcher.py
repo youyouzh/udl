@@ -179,7 +179,7 @@ class ImageTemplateMatcher(object):
             log.info('locate result: {} for template: {}'.format(box, target_image_path))
 
 
-# 使用图片Sift特征来进行匹配，适合于目标特征丰富，画面信息丰富的图片，图片缩放也能匹配上
+# 使用图片的ORB特征来进行匹配，适合于目标特征丰富，画面信息丰富的图片，图片缩放也能匹配上
 class OrbImageTemplateMatcher(ImageTemplateMatcher):
 
     def __init__(self):
